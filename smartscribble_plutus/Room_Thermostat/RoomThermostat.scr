@@ -1,0 +1,56 @@
+protocol RoomThermostat (role Installer, role User) {
+
+    field modeValue:ByteString, temperatureValue:Integer;
+    
+    Init(tempInit:Integer) from Installer[|
+        returnOutputOk $ setTemperatureValue tempInit
+                       $ setStateVal stateVal output
+    |];
+
+    StartThermostat() from Installer[|
+        returnOk
+    |];   
+
+    SetTargetTemperature(targetTemp:Integer) from User[|
+                returnOutputOk $ setTemperatureValue targetTemp
+                               $ setStateVal stateVal output
+            |];
+    SetMode(targetMode:String) from User[|
+                returnOutputOk $ setModeValue (toBuiltin $ C.pack targetMode)
+                               $ setStateVal stateVal output
+            |];
+
+// 2 versao
+//    choice at User {
+//        Off [|returnOk|]: {
+//            SetMode(''Cool'') from User;
+//        }
+//        Cool [|returnOk|]: {
+//            SetMode("Cool") from User;
+//        }
+//        Heat [|returnOk|]: {
+//            SetMode("Cool") from User;
+//        }
+//        Auto [|returnOk|]: {
+//            SetMode("Cool") from User;
+//        }
+//    }   
+
+// 1 versao
+//    choice at User {
+//        Temperature [|returnOk|]: {
+//            SetTargetTemperature(targetTemp:Integer) from User[|
+//                returnOutputOk $ setTemperatureValue targetTemp
+//                               $ setStateVal stateVal output
+//            |];
+//        }
+//        Mode [|returnOk|]: {
+//            SetMode(targetMode:String) from User[|
+//                returnOutputOk $ setModeValue (toBuiltin $ C.pack targetMode)
+//                               $ setStateVal stateVal output
+//            |];
+//        }
+//    }   
+
+}
+

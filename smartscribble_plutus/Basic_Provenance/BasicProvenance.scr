@@ -1,0 +1,20 @@
+protocol BasicProvenance (role Counterparty, role Owner) {
+    //should be signed in owner but for the purposes of compiling the file it is not
+    // signed roles require a public wallet when compiling the smartscrible
+
+    field counterParty:ByteString;
+
+    Init() from Owner[|
+        returnOutputOk $ setStateVal stateVal output
+    |];
+
+    TransferResponsibility(newParty:String) from Counterparty[|
+        returnOutputOk $ setCounterParty (toBuiltin $ C.pack newParty)
+                       $ setStateVal stateVal output 
+    |];
+    
+    Complete() from Owner[|
+        returnOutputOk $ setStateVal stateVal output
+    |];
+}
+

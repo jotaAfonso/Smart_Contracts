@@ -1,0 +1,24 @@
+protocol HelloBlockchain (role BazaarMaintainer, role Party) {
+    field aBalance:Integer, bBalance:Integer, itemPrice:Integer, itemName:ByteString;
+
+    Init(aPrice:Integer, bPrice:Integer) from BazaarMaintainer[|
+        returnOutputOk $ setABalance aPrice
+                       $ setBBalance bPrice
+                       $ setStateVal stateVal output          
+  |];
+
+    listItem(name:String, price:Integer) from Party[|
+        returnOutputOk $ setABalance aPrice
+                       $ setBBalance bPrice
+                       $ setStateVal stateVal output          
+  |];
+
+    buyItem() from Party[|
+        if bBalance <= itemPrice
+        then returnError "Party B does not have enough funds."        
+        else returnOutputOk $ setBBalance (bBalance - itemPrice) 
+                            $ setABalance (aBalance + itemPrice) 
+                            $ setStateVal stateVal output
+    |];     
+
+}

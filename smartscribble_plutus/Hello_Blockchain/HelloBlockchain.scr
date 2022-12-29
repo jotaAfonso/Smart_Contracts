@@ -1,0 +1,23 @@
+protocol HelloBlockchain (role Responder, role Requester) {
+    field message:ByteString;
+
+    Init(msg:String) from Requester[|
+        returnOutputOk $ setMessage (toBuiltin $ C.pack msg)
+                       $ setStateVal stateVal output          
+    |];
+    
+    // simplest way, but the transitions between states are still not correct in the generated code
+    rec Loop {
+        SendRespond(msgRespond:String) from Responder[|
+           returnOutputOk $ setMessage (toBuiltin $ C.pack msgRespond)
+                          $ setStateVal stateVal output          
+        |];                   
+              
+        SendRequest(msgRequest:String) from Requester[|
+           returnOutputOk $ setMessage (toBuiltin $ C.pack msgRequest)
+                          $ setStateVal stateVal output                        
+        |];
+
+        Loop;           
+    }
+}

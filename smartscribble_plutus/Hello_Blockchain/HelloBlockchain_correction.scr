@@ -1,0 +1,27 @@
+protocol HelloBlockchain (role Responder, role Requester) {
+    field message:ByteString;
+
+    Init(msg:String) from Initiater[|
+        returnOutputOk $ setMessage (toBuiltin $ C.pack msg)
+                       $ setStateVal stateVal output          
+    |];
+
+    SendRespond(msgRespond:String) from Responder[|
+                   returnOutputOk $ setMessage (toBuiltin $ C.pack msgRespond)
+                                  $ setStateVal stateVal output          
+                |];
+
+    rec Loop {
+        // choice needed so that a sendIt state is created
+        choice at Requester {
+            sendReq[|returnOutputOk|]:{            
+                SendRequest(msgRequest:String) from Requester[|
+                       returnOutputOk $ setMessage (toBuiltin $ C.pack msgRequest)
+                                      $ setStateVal stateVal output                        
+                    |];}
+            
+        }Loop;
+    }
+}
+
+

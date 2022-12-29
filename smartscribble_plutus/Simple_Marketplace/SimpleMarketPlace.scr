@@ -1,0 +1,26 @@
+protocol SimpleMarketPlace (role Owner, role Buyer) {
+
+    field askingPrice:Integer, offerPrice:Integer, descriptionValue:ByteString;
+
+    Initialise(description:String, price:Integer) from Owner[|
+        returnOutputOk $ setAskingPrice price
+                       $ setDescriptionValue (toBuiltin $ C.pack description)
+                       $ setStateVal stateVal output
+    |];
+    
+    MakeOffer(offerPriceValue:Integer) from Buyer[|
+        if offerPriceValue <= 0
+        then returnError "Offer price low."        
+        else returnOutputOk $ setOfferPrice offerPriceValue 
+                            $ setStateVal stateVal output
+
+    |];
+    
+    Reject() from Owner[|
+        returnOk
+    |];
+    
+    AcceptOffer() from Owner[|
+        returnOk        
+    |];
+}

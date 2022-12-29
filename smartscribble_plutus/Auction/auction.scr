@@ -1,0 +1,38 @@
+protocol Auction (signed role Seller, role Buyer) {
+   field currBid:Value,lastBidder:PubKeyHash,asset:Integer;
+
+    initialise (initBid:Value, assetToSell:Integer) from Seller[|
+        returnOutputOk $ setCurrBid initBid
+                       $ setLastBidder noKey
+                       $ setAsset assetToSell output
+    |];
+
+  rec Loop {
+    choice at Seller {      
+        continueAuction [|returnOk|]: {   
+            bid (newBid:Value) from Buyer[|
+                pkh <- ownPaymentPubKeyHash
+                if (newBid `V.gt`mempty) && (newBid `V.gt`currBid)
+                then returnOutputOk $ if (lastBidder == noKey)
+                    then setCurrBid newBid
+                         $ setLastBidder pkh
+                         $ setStateVal newBid output
+                    else setCurrBid newBid
+                         $ setLastBidder pkh
+                         $ setStateVal newBid 
+                         $ setConstraint (Constraints.mustPayToPubKey lastBidder currBid) output
+                else returnError "Invalid Bid!"
+             |];
+             Loop;
+        }
+        closeAuction [|returnOk|]: {  
+            collectFundsAndGiveRewards () from Seller[|
+                returnOutputOk $ setConstraint (Constraints.mustPayToPubKey (head sellerId) currBid)
+                               $ setStateVal mempty output
+            |];
+        }
+    }
+  }
+  
+   checkWinner () from Seller;      
+} 
