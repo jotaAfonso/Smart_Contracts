@@ -1,0 +1,21 @@
+main contract HelloBlockchain {
+    state Request;
+    state Respond;
+
+    string message;
+
+    HelloBlockchain@Owned (string msg) {
+        this.message = msg;  
+        ->Request;  
+    }
+
+    transaction sendResponse(HelloBlockchain@Request >> Respond this, string msg) {
+        this.message = msg;
+        ->Respond;
+    }
+
+    transaction sendRequest(HelloBlockchain@Respond >> Request this, string msg) {
+        this.message = msg;
+        ->Request;
+    }
+}

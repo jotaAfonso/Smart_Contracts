@@ -1,0 +1,37 @@
+import "Party.obs"
+
+main contract Item {
+    
+    state ItemAvailable;
+    state ItemSold;
+
+    string itemName;
+    int itemPrice;
+
+    Party@Unowned ownerSeller;
+
+    Item@Owned (string name, int price, Party@Unowned seller) {
+        itemName = name;
+        itemPrice = price;
+        ownerSeller = seller;
+        -> ItemAvailable;
+    }
+
+    transaction finalizeSale(Item@ItemAvailable >> (ItemAvailable | ItemSold) this, Party@Owned buyer) {   
+        switch buyer {
+            case HasBalance {
+                if (buyer.getBalance() - itemPrice >= 0){
+                    ownerSeller.updateBalance(itemPrice);
+                    buyer.updateBalance(itemPrice);
+                    ->ItemSold;
+                }
+                else {
+                    ->ItemAvailable;
+                }
+            }
+            case EmptyBalance {
+                revert("");
+            }
+        } 
+    }
+}

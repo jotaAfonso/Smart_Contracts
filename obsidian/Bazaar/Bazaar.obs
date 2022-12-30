@@ -1,0 +1,29 @@
+import "Item.obs"
+import "Party.obs"
+
+main contract Bazaar {
+    state CreatedBazaar;
+    state ItemListed;
+
+    Party@Owned seller;
+    Party@Owned buyer;
+
+    string itemName;
+    int itemPrice;
+
+
+    Bazaar@Owned(int sellerBalance, int buyerBalance, string name, int price) {
+        seller = new Party(sellerBalance);
+        buyer = new Party(buyerBalance);
+
+        itemName = name;
+        itemPrice = price;
+        
+        ->CreatedBazaar;
+    } 
+
+    transaction listItem(Bazaar@Owned >> ItemListed this) {
+        Item i = new Item(itemName, itemPrice, seller);
+        -> ItemListed;
+   }
+}

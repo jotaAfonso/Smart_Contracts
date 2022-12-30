@@ -1,0 +1,51 @@
+main contract SimpleMarketPlace {
+    state ItemAvailable;
+    state OfferPlaced;
+    state Accepted;
+
+    string description;
+    int offerPrice;
+
+    // @ is for permissions 
+    // could probably be @Request 
+    SimpleMarketPlace@Owned (string dsc, int price) {
+        this.description = dsc;
+        this.offerPrice = price;
+        ->ItemAvailable;  
+    }
+
+    transaction makeOffer(SimpleMarketPlace@ItemAvailable >> ( OfferPlaced | ItemAvailable ) this, int offer) {
+        switch this {
+            case ItemAvailable {
+                if (offer >= 0) {
+                    revert "Item is not Available";
+                }
+                else
+                {
+                    this.offerPrice = offer;
+                    ->OfferPlaced;
+                }
+            }
+            case Accepted {
+                // do nothing or revert to itemvailable
+                revert "Item is not Available";
+            }
+            case OfferPlaced {
+                // do nothing or revert to itemvailable
+                revert "Item is not Available";
+            }
+            case Nothing {
+                revert "Revert";
+            }
+        }
+    }
+
+    transaction rejectOffer(SimpleMarketPlace@OfferPlaced >> ItemAvailable this) {
+        this.offerPrice = -1;
+        ->ItemAvailable;
+    }
+
+     transaction acceptOffer(SimpleMarketPlace@OfferPlaced >> Accepted this) {
+        ->Accepted;
+    }
+}

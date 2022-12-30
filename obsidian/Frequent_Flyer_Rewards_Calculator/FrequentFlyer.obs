@@ -1,0 +1,88 @@
+contract NodeList {
+    state HasValue {
+        int id;
+        int value;
+        NodeList@Owned next;
+    }
+    state Nothing;
+
+    NodeList@Owned() {
+        ->Nothing;
+    }
+
+    transaction setValue(NodeList@Owned >> HasValue this, int theId, int numValue) {
+        HasValue::id = theId;
+        HasValue::value = numValue;
+        HasValue::next = new NodeList();
+        ->HasValue;
+    }
+
+    transaction setNext(NodeList@HasValue this, NodeList@Owned >> Unowned nextNode) {
+        this.next = nextNode;
+    }
+
+    transaction getValue(NodeList@HasValue this) returns int {
+        return value;
+    }
+
+    transaction search(int targetId) returns int {
+        switch this {
+            case HasValue {
+                if (id == targetId) {
+                    return value;
+                }
+                return next.search(targetId);
+            }
+            case Nothing {
+                revert "Node ID not found";
+            }
+        }
+    }
+}
+
+main contract FrequentFlyer {
+    state SetFlyReward;
+    state MilesAdded;
+    
+    NodeList@Owned miles;
+    int rewardsPerMile;
+    int indexCalculatedUpto;
+    int totalRewards;
+    int milesCounter;
+
+
+    FrequentFlyer@Owned (int rPM) {
+        this.miles = new NodeList();  
+        this.rewardsPerMile = rPM;
+        this.indexCalculatedUpto = 0;
+        this.totalRewards = 0;
+        this.milesCounter = 0; 
+        ->SetFlyReward;  
+    }
+
+    transaction addMiles(FrequentFlyer@SetFlyReward >> MilesAdded this, int value){
+        NodeList nextNode = new NodeList();
+        nextNode.setValue(this.milesCounter + 1, value);
+        this.milesCounter += 1;
+        nextNode.setNext(this.miles);
+        this.miles = nextNode;
+        ->MilesAdded; 
+    }
+
+    transaction computeLocal(FrequentFlyer@MilesAdded this, int i) returns int{
+        if(i == 0){
+            return queryNode(0);
+        } else {
+            return queryNode(i) + computeLocal(i - 1);
+        }
+    }
+
+    transaction computeTotalRewards(FrequentFlyer@MilesAdded this) {
+        this.totalRewards = computeLocal(this.milesCounter);   
+    }
+
+    transaction queryNode(FrequentFlyer@MilesAdded this, int id) returns int {
+        return this.miles.search(id);
+    }
+}
+

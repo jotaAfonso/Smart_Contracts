@@ -1,0 +1,31 @@
+main contract BasicProvenance {
+    state Created;
+    state InTransit;
+    state Completed;
+
+    // @ is for permissions 
+    // could probably be @Request 
+    BasicProvenance@Owned () {
+        ->Created;  
+    }
+
+    transaction initTransfer(BasicProvenance@Created >> InTransit this) {
+        ->InTransit;
+    }
+
+
+    transaction TransferResponsability(BasicProvenance@Owned >> Unowned this) {
+        switch this {
+            case InTransit {
+                BasicProvenance basic = this;
+            }
+            case Nothing {
+                revert "Revert";
+            }
+        }
+    }
+
+    transaction sendRequest(BasicProvenance@InTransit >> Completed this) {
+        ->Completed;
+    }
+}

@@ -1,0 +1,64 @@
+contract Mode {
+
+    state TurnOff;
+    state Cool;
+    state Heat;
+    state Auto;
+
+    Mode@Owned (){
+        ->TurnOff;    
+    }
+
+    // limitation of not picking a specific
+    transaction changeStateScrollThrough (Mode@Owned >> (TurnOff | Cool | Heat | Auto) this) {
+        switch this {
+            case TurnOff {
+                ->Cool;
+            }
+           case Cool {
+                ->Heat;
+            }
+           case Heat {
+                ->Auto;
+            }
+           case Auto {
+                ->TurnOff;
+            }
+        }
+    }
+
+    transaction reset(Mode@Owned >> TurnOff this){
+        ->TurnOff;
+    }
+}
+
+main contract RoomThermostat {
+    state Created;
+    state InUse;
+
+    int temperature;
+
+    Mode@Owned modeTherm; 
+
+    RoomThermostat@Owned(int tempIdeal) {
+        this.temperature = tempIdeal;
+        this.modeTherm = new Mode();
+        ->Created;
+    }
+
+    transaction startThermoStat(RoomThermostat@Created >> InUse this){
+        ->InUse;
+    }
+
+    transaction setTargetTemp(RoomThermostat@InUse this, int temp){
+        this.temperature = temp;
+    }
+
+    transaction setMode(){
+        this.modeTherm.changeStateScrollThrough();
+    }
+
+    transaction resetMode(){
+        this.modeTherm.reset();
+    }
+}

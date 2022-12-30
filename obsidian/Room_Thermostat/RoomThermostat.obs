@@ -1,0 +1,61 @@
+contract Mode {
+    state TurnOff;
+    state Cool;
+    state Heat;
+    state Auto;
+
+    Mode@TurnOff (){
+        ->TurnOff;    
+    }
+
+    // switch not working with string
+    transaction changeState(Mode@TurnOff >> (TurnOff | Cool | Heat | Auto) this, string stateValue){
+        if (stateValue == "Off") {
+            ->TurnOff;
+        }
+        if (stateValue == "Cool") {
+            ->Cool;
+        }
+        if (stateValue == "Heat") {
+            ->Heat;
+        }
+        else {
+            ->Auto;
+        }
+    }
+
+    transaction reset(Mode@Owned >> TurnOff this){
+        ->TurnOff;
+    }
+}
+
+main contract RoomThermostat {
+    state Created;
+    state InUse;
+
+    int temperature;
+
+    Mode@TurnOff modeTherm; 
+
+    RoomThermostat@Owned(int tempIdeal) {
+        this.temperature = tempIdeal;
+        this.modeTherm = new Mode();
+        ->Created;
+    }
+
+    transaction startThermoStat(RoomThermostat@Created >> InUse this){
+        ->InUse;
+    }
+
+    transaction setTargetTemp(RoomThermostat@InUse this, int temp){
+        this.temperature = temp;
+    }
+
+    transaction setMode(string modeValue){
+        this.modeTherm.changeState(modeValue);
+    }
+
+    transaction resetMode(){
+        this.modeTherm.reset();
+    }
+}

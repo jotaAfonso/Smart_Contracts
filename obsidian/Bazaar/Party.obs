@@ -1,0 +1,26 @@
+main contract Party {
+    int balance;
+
+    state HasBalance;
+    state EmptyBalance;
+
+    Party@Owned(int m) {
+        balance = m;
+        if (m >= 0) {
+            ->HasBalance;
+        }
+        else{
+            ->EmptyBalance;
+        } 
+    }
+
+    transaction updateBalance(int itemPrice) {
+        if (balance + itemPrice > 0){
+            balance = balance + itemPrice;
+        }            
+    }
+
+    transaction getBalance(Party@Owned this) returns int {
+        return balance;
+    }
+}

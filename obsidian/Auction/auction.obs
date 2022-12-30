@@ -1,0 +1,127 @@
+//English Auction
+
+contract Bidder {
+    string name;
+    int bidAmount;
+    int balance;
+
+    state WonAuction;
+    state Bidding;
+
+    Bidder@Owned(string n, int m, int b) {
+        bidAmount = b;
+        name = n;
+        balance = m;
+        -> Bidding;
+    }
+
+    transaction createBid(Bidder@Owned this) returns int {
+        balance = balance - bidAmount;
+        return bidAmount;
+    }
+
+    transaction setBidAmount(Bidder@Owned this, int newBidAmount) {
+        bidAmount = newBidAmount;
+    }
+
+    transaction getBidAmount(Bidder@Owned this) returns int {
+        return bidAmount;
+    }
+
+    transaction getName(Bidder@Owned this) returns string {
+        return name;
+    }
+
+    transaction won(Bidder@Owned >> WonAuction this) {
+        -> WonAuction;
+    }
+
+    transaction returnBidMoney(Bidder@Owned this, int previousBid) {
+        balance = balance + previousBid;
+    }
+}
+
+contract Seller {
+    state SoldItem {
+        int price;
+    }
+    state Unsold;
+
+    Seller@Owned() {
+        -> Unsold;
+    }
+
+    transaction receiveBid(Seller@Owned >> SoldItem this, int finalBid) {
+        -> SoldItem(price = finalBid);
+    }
+}
+
+main contract Auction {
+
+    Seller@Owned seller;
+
+    state Open {
+        int maxBid;
+        Bidder@Owned maxBidder;
+    }
+
+    state Withdraw {
+        int refAmount;
+        Bidder@Owned refBidder;
+        int highestBid;
+        Bidder@Owned highestBidder;
+
+    }
+
+    state AuctionClosed{
+        Bidder@Owned winner;        
+    }
+
+
+
+    Auction@Owned() {
+        seller = new Seller();
+        -> Open(maxBid = -1, maxBidder = new Bidder("none",0, 0));
+    }
+
+    transaction makeBid(Auction@Open >> (Open | Withdraw) this, Bidder@Bidding >> Unowned bidder) {
+        if (bidder.getBidAmount() > maxBid) {
+            if (maxBidder.getName() != bidder.getName()) {
+                ->Withdraw(refAmount = maxBid, refBidder = maxBidder, highestBid = bidder.createBid(), highestBidder = bidder);
+            }
+        }
+    }
+
+    transaction withdrawFunds(Auction@Withdraw >> (Open | Withdraw) this, Bidder@Bidding >> Unowned bidder) {
+        if (refBidder.getName() != bidder.getName()) {
+            refBidder.returnBidMoney(refAmount);
+            -> Open(maxBid = highestBid, maxBidder = highestBidder);
+        }
+    }
+
+    transaction endAuction(Auction@(Open | Withdraw) >> AuctionClosed this) {
+        switch this {
+            case Open {
+                updateSellerBuyer(seller, maxBidder, maxBid);
+                 -> AuctionClosed(winner = maxBidder);         
+            }
+           case Withdraw {
+                updateSellerBuyer(seller, highestBidder, highestBid);
+                 -> AuctionClosed(winner = highestBidder);         
+           }
+        }
+    }
+
+    transaction updateSellerBuyer(Seller@Owned >> SoldItem sell, Bidder@Owned >> WonAuction buyer, int finalBid) {
+        sell.receiveBid(finalBid);
+        buyer.won();
+    }
+
+    transaction checkWinner(Auction@AuctionClosed this, Bidder@(Bidding | WonAuction) >> Unowned bidder) returns bool {
+        if (winner.getName() != bidder.getName()) {
+            return true;        
+        }
+        return false;
+    }
+
+}

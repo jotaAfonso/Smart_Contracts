@@ -1,0 +1,107 @@
+contract Wallet {
+
+    state Empty;
+    state HasBalance;
+
+    int money;
+
+    Wallet@Owned (int balance){
+        this.money = balance;
+        if (balance <= 0){
+            -> Empty;
+        }
+        else {
+            -> HasBalance;
+        }            
+    }
+
+    transaction viewBalance() returns int {
+        switch this {
+            case HasBalance {
+                return this.money;
+            }
+            case Empty {
+                revert("Empty Balance.");
+            }
+        }           
+    }
+
+    transaction updateBalance(int incomingValue) {
+        this.money = this.money + incomingValue; 
+    }
+    
+}
+
+contract ListItem {
+    
+    state ItemAvailable;
+    state ItemSold;
+
+    string ItemName;
+    int ItemPrice;
+
+    ListItem@Owned () {
+        this.ItemName = "";
+        this.ItemPrice = -1;
+        -> ItemAvailable;
+    }
+
+    ListItem@Owned (string name, int price) {
+        this.ItemName = name;
+        this.ItemPrice = price;
+        -> ItemAvailable;
+    }
+
+    transaction finalizeSale(ListItem@Owned >> (ItemAvailable | ItemSold) this, Wallet@Owned walletA, Wallet@Owned walletB) {        
+        if (walletB.viewBalance() >= this.ItemPrice){
+            walletB.updateBalance(-this.ItemPrice);
+            walletA.updateBalance(this.ItemPrice);
+            -> ItemSold;
+        }
+        else {
+            -> ItemAvailable;            
+        }
+    }
+}
+
+main contract Bazaar {
+    state PartyProvisioned;
+    state ItemListed;
+    state CurrentSaleFinalized;
+
+    Wallet@Owned PartyA;
+    // here is the doubt 
+    Wallet@Owned PartyB;
+
+    ListItem@Owned item;
+
+    string ItemName;
+    int ItemPrice;
+
+    Bazaar@Owned(int aBalance, int bBalance) {
+        this.PartyA = new Wallet(aBalance);
+        this.PartyB = new Wallet(bBalance);
+        
+        // needed to be initialized
+        this.item = new ListItem();
+        this.ItemName = "";
+        this.ItemPrice = -1;
+        ->PartyProvisioned;
+    }
+
+    transaction buyItem(Bazaar@Owned >> CurrentSaleFinalized this){
+        if (this.PartyB in HasBalance) {
+            this.item.finalizeSale(this.PartyA, this.PartyB);        
+            ->CurrentSaleFinalized;
+        }
+        else{
+            revert ("Party B is empty.");       
+        }
+        
+    } 
+
+    transaction listItem(Bazaar@Owned >> ItemListed this, string name, int price) {
+        item = new ListItem(name, price);
+        -> ItemListed;
+   }
+}
