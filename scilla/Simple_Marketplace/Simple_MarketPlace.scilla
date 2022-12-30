@@ -1,0 +1,110 @@
+scilla_version 0
+
+import IntUtils
+
+library SimpleMarketplace
+
+(* Global variables *)
+let zero_address = 0x0000000000000000000000000000000000000000
+
+let fail_code     = Uint32 1
+let success_code  = Uint32 2
+
+type StateType =
+  | Available
+  | Placed
+  | Accepted
+
+let zero = Uint32 0
+
+contract SimpleMarketplace
+ (
+  instance_Owner_param: ByStr20,
+  price_param: Uint32,
+  description_param: String
+)
+
+field state: StateType = Available
+
+field instance_Owner : ByStr20 = instance_Owner_param
+field asking_Price : Uint32 = price_param
+field description : String = description_param
+
+field instance_Buyer : ByStr20 = zero_address
+field offer_Price : Uint32 = Uint32 0
+
+transition make_Offer (offer_price_param : Uint32)
+ positive = uint32_gt offer_price_param zero;
+  match positive with
+   | False =>
+    e = {_eventname : "make_Offer"; code : fail_code};
+    event e
+   | True =>
+    l_State <- state;
+     match l_State with
+      | Available => 
+       l_instance_Owner <- instance_Owner;
+       is_Owner = builtin eq l_instance_Owner _sender;
+        match is_Owner with
+         | False =>
+          instance_Buyer := _sender;
+          offer_Price := offer_price_param;
+          l_Result_State = Placed;
+          state := l_Result_State;
+          e = {_eventname : "make_Offer"; code : success_code};
+          event e
+         | True=>
+          e = {_eventname : "make_Offer"; code : fail_code};
+          event e
+        end
+      | _ =>
+       e = {_eventname : "make_Offer"; code : fail_code};
+       event e
+     end
+  end
+end
+
+transition reject_Offer ()
+ l_State <- state;
+  match l_State with 
+   | Placed =>
+    l_instance_Owner <- instance_Owner;
+    is_owner = builtin eq l_instance_Owner _sender;
+     match is_owner with 
+      | False =>
+        e = {_eventname : "reject_Offer"; code : fail_code};
+        event e 
+      | True =>
+       instance_Buyer := zero_address; 
+       l_Result_State = Available;
+       state := l_Result_State;
+       e = {_eventname : "reject_Offer"; code : success_code};
+       event e
+     end
+   | _ =>
+    e = {_eventname : "reject_Offer"; code : fail_code};
+    event e 
+  end
+end
+
+transition accept_Offer ()
+ l_State <- state;
+  match l_State with 
+   | Placed =>
+    l_instance_Owner <- instance_Owner;
+    is_owner = builtin eq l_instance_Owner _sender;
+     match is_owner with 
+      | False =>
+        e = {_eventname : "accept_Offer"; code : fail_code};
+        event e  
+      | True =>
+       l_Result_State = Accepted;
+       state := l_Result_State;
+       e = {_eventname : "accept_Offer"; code : success_code};
+       event e
+     end
+   | _ =>
+    e = {_eventname : "accept_Offer"; code : fail_code};
+    event e 
+  end
+end

@@ -1,0 +1,90 @@
+scilla_version 0
+
+library HelloBlockchain
+
+(* Global variables *)
+let zero_address = 0x0000000000000000000000000000000000000000
+
+let fail_code     = Uint32 1
+let success_code  = Uint32 2
+
+type StateType =
+  | Request
+  | Respond
+
+contract HelloWorld
+(
+  requestor_param: ByStr20
+)
+
+field state: StateType = Request
+
+field message_request : String = ""
+field message_response : String = "" 
+ 
+field requestor : ByStr20 = requestor_param 
+field responder : ByStr20 = zero_address
+
+transition send_Request (message : String)
+ l_requestor <- requestor;
+ is_requestor = builtin eq l_requestor _sender;
+  match is_requestor with
+   | False =>
+    e = {_eventname : "send_Request"; code : fail_code};
+    event e
+   | True =>
+    l_State <- state;
+     match l_State with
+      | Request =>
+       e = {_eventname : "send_Request"; code : fail_code};
+       event e
+      | Respond => 
+       l_Result_State = Request;
+       state := l_Result_State;
+       message_request := message;
+       e = {_eventname : "send_Request"; code : success_code};
+       event e
+     end
+  end
+end
+
+transition get_Request ()
+  msg <- message_request;
+  e = {_eventname: "get_Request"; message: msg};
+  event e
+end
+
+transition send_Response (message : String)
+ l_responder <- responder;
+ is_zero_address = builtin eq l_responder zero_address;
+  match is_zero_address with
+   | True => responder := _sender
+   | False =>
+  end;
+ l_responder <- responder;
+ is_requestor = builtin eq l_responder _sender;
+  match is_requestor with
+   | False =>
+    e = {_eventname : "send_Response"; code : fail_code};
+    event e
+   | True =>
+    l_State <- state;
+     match l_State with
+      | Respond =>
+       e = {_eventname : "send_Response"; code : fail_code};
+       event e
+      | Request => 
+       l_Result_State = Respond;
+       state := l_Result_State;
+       message_response := message;
+       e = {_eventname : "send_Response"; code : success_code};
+       event e
+     end
+  end
+end
+
+transition get_Response ()
+  msg <- message_response;
+  e = {_eventname: "get_Response"; message: msg};
+  event e
+end
