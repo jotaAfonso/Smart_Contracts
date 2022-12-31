@@ -1,0 +1,11 @@
+[package]
+name = "HelloBlockchain"
+version = "0.0.0"
+    
+        
+[addresses]
+Std = "0x1"
+    
+        
+[dependencies]
+aptos-core = { git="https://github.com/aptos-labs/aptos-core", rev="367608ab5cf726039ff44bfdac1f2177210b1440", subdir="aptos-move/framework/aptos-framework/" }
