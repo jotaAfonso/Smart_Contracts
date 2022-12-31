@@ -1,0 +1,233 @@
+scilla_version 0
+
+(***************************************************)
+(*               Associated library                *)
+(***************************************************)
+
+import BoolUtils as BoolU
+
+library Auction
+
+let one_msg = 
+  fun (msg : Message) => 
+    let nil_msg = Nil {Message} in
+    Cons {Message} msg nil_msg
+    
+type StateType =
+  | Start
+  | Bid
+  | Closed
+  
+type Sucess =
+  | FirstBidAccept
+  | BidAccept
+  | MoneySent
+  
+type Error =
+  | BidTooLow
+  | NothingToWithdraw
+  | AuctionStillLive
+  | AuctionOver
+  | IsHighestBidder
+  | InvalidState (* Generic one *)
+  
+let make_sucess_message =
+  fun (result : Sucess) =>
+    let result_code = 
+      match result with
+      | FirstBidAccept   => Int32 1
+      | BidAccept        => Int32 2
+      | MoneySent        => Int32 3
+      end
+    in
+    {_eventname: "Bid accepted."; code: result_code} 
+  
+let make_error =
+  fun (result : Error) =>
+    let result_code = 
+      match result with
+      | BidTooLow             => Int32 -1
+      | NothingToWithdraw     => Int32 -2
+      | AuctionStillLive      => Int32 -3
+      | AuctionOver           => Int32 -4
+      | IsHighestBidder       => Int32 -5
+      | InvalidState          => Int32 -6
+      end
+    in
+    { _exception : "Error"; code : result_code }
+
+(***************************************************)
+(*             The contract definition             *)
+(***************************************************)
+
+contract Auction
+(
+  beneficiary  : ByStr20
+)
+
+field highestBidder  : Option ByStr20       = None {ByStr20}
+field highestBid     : Uint128              = Uint128 0
+field pendingReturns : Map ByStr20 Uint128  = Emp ByStr20 Uint128
+
+field state          : StateType            = Start
+
+(* Emit Errors *)
+procedure ThrowError(err : Error)
+  e = make_error err;
+  throw e
+end
+
+(* Logs Event *)
+procedure CreateEventSuccess(suc : Sucess)
+  e = make_sucess_message suc;
+  event e
+end
+
+(* Bidding on the auction, if auction is has not ended and the bid sent is higher than the current highest bid *)
+transition Bid ()
+  l_state <- state;
+  match l_state with
+  
+  | Start =>
+    (* Checks if the highest bid lower than the amount received *)
+    l_highestBid <- highestBid;
+    sufficientBid = builtin lt l_highestBid _amount;
+    match sufficientBid with 
+    
+    | False =>
+      err = BidTooLow;
+      ThrowError err
+    
+    | True =>
+      
+      (* Check if there is a higest bidder *)
+      l_highestBidder <- highestBidder;
+      match l_highestBidder with
+        
+      (* There is already a highest bidder *)
+      | Some prevHighestBidder =>
+        pendingReturnsForPrevHB <- pendingReturns[prevHighestBidder];
+        getPRForPrevHighestBidder = match pendingReturnsForPrevHB with
+          
+        (* User already has some balance in the pending returns that is not claimed *)
+        | Some pendingReturnsForPrevHB =>
+          builtin add l_highestBid pendingReturnsForPrevHB
+          
+        (* Prev highest bidder has no pending returns. *)
+        | None => l_highestBid
+        end;
+      
+      is_newHighestBidder = builtin eq prevHighestBidder _sender;
+      match is_newHighestBidder with
+      | True =>
+        accept;
+        
+        (* Update pending returns of previous highest Bidder *)
+        pendingReturns[prevHighestBidder] := getPRForPrevHighestBidder;
+        
+        (* stick it in a procedure, to avoid repeats *)
+        (* Update the highest bidder and highest bid *)
+        bidder = Some {ByStr20} _sender;
+        
+        highestBidder := bidder;
+        highestBid := _amount;
+        
+        l_Result_State = Bid;
+        state := l_Result_State;
+        
+        suc = BidAccept;
+        CreateEventSuccess suc
+        
+      | False =>
+        err = IsHighestBidder;
+        ThrowError err
+      end
+      
+    | None =>
+      (* Process first bid *)
+      first_bidder = Some {ByStr20} _sender;
+      
+      highestBidder := first_bidder;
+      highestBid := _amount;
+      
+      l_Result_State = Bid;
+      state := l_Result_State;
+      
+      suc = FirstBidAccept;
+      CreateEventSuccess suc
+      end 
+    end
+  | _ => 
+    err = AuctionOver;
+    ThrowError err
+  end
+end  
+ 
+ 
+(* Bidders getting refunds, if bidder has a pending return *)
+transition Withdraw ()
+  
+  l_state <- state;
+  match l_state with
+  
+  | Start =>
+    err = InvalidState;
+    ThrowError err
+  
+  | _ =>
+    pr <- pendingReturns[_sender];
+    match pr with
+      
+    | None =>
+      err = NothingToWithdraw;
+      ThrowError err
+    
+    | Some v =>
+      delete pendingReturns[_sender];
+      
+      suc = MoneySent;
+      CreateEventSuccess suc;
+      
+      l_Result_State = Start;
+      state := l_Result_State;
+      
+      msg  = {_tag : ""; _recipient : _sender; _amount : v};
+      msgs = one_msg msg;
+      send msgs
+    end
+  end 
+end
+
+
+(* Ends Auction, if the transaction sender is the owner and the contract is still live. *)
+transition AuctionEnd ()
+
+  (* Checks if sender is the owner *)
+  is_owner = builtin eq beneficiary _sender;
+  match is_owner with
+    | True => 
+    
+      l_state <- state;
+      match l_state with
+      | Closed =>
+        err = AuctionOver;
+        ThrowError err
+        
+      | _ =>
+        l_Result_State = Closed;
+        state := l_Result_State;
+        
+        l_highestBid <- highestBid;
+        e = {_eventname: "Auction ended."; highest_bid: l_highestBid};
+        event e;
+        
+        msg  = {_tag : ""; _recipient : beneficiary; _amount : l_highestBid};
+        msgs = one_msg msg;
+        send msgs
+        
+      end
+    | False => 
+      err = AuctionOver;
+      ThrowError err
+  end
+end

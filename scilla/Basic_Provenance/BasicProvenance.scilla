@@ -1,0 +1,77 @@
+scilla_version 0
+
+import BoolUtils IntUtils ListUtils
+
+library BasicProvenance
+
+let zero_address = 0x0000000000000000000000000000000000000000
+
+let fail_code     = Uint32 1
+let success_code  = Uint32 2
+
+type StateType =
+  | Created
+  | In_Transit
+  | Completed
+
+contract BasicProvenance
+ (
+  initiating_Counter_Party  : ByStr20,
+  supply_Chain_Owner        : ByStr20,
+  supply_Chain_Observer     : ByStr20
+)
+
+field state         : StateType = Created
+
+field counter_Party : ByStr20 = initiating_Counter_Party
+field owner         : ByStr20 = supply_Chain_Owner
+field observer      : ByStr20 = supply_Chain_Observer
+
+field previous_Counter_Party : ByStr20 = zero_address
+
+transition transfer_Responsibility(new_Counter_Party_param : ByStr20)
+ l_counter_Party <- counter_Party;
+ is_counter_Party = builtin eq l_counter_Party _sender;
+ match is_counter_Party with
+   | False =>
+    e = {_eventname : "transfer_Responsibility"; code : fail_code};
+    event e
+   | True => 
+    l_State <- state;
+    match l_State with
+     | Completed =>
+       e = {_eventname : "transfer_Responsibility"; code : fail_code};
+       event e
+     | _ =>
+      previous_Counter_Party := l_counter_Party;
+      counter_Party := new_Counter_Party_param;
+      e = {_eventname : "transfer_Responsibility"; code : success_code};
+      event e
+    end
+  end
+end
+
+transition complete()
+ l_owner <- owner;
+ is_owner = builtin eq l_owner _sender;
+ match is_owner with
+  | False =>
+    e = {_eventname : "complete"; code : fail_code};
+    event e
+  | True =>
+   l_State <- state;
+   match l_State with
+    | In_Transit => 
+     l_Result_State = Completed;
+     state := l_Result_State;
+     l_counter_Party <- counter_Party;
+     previous_Counter_Party := l_counter_Party;
+     counter_Party := zero_address;
+     e = {_eventname : "complete"; code : success_code};
+     event e
+    | _ =>
+     e = {_eventname : "complete"; code : fail_code};
+     event e
+   end
+  end
+end

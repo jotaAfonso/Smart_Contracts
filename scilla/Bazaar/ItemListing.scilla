@@ -1,0 +1,117 @@
+scilla_version 0
+
+import BoolUtils IntUtils ListUtils
+
+library Item
+
+let zero_address = 0x0000000000000000000000000000000000000000
+let empty_String = "" 
+
+let zero         = Uint32 0
+
+let fail_code     = Uint32 1
+let success_code  = Uint32 2
+
+type StateType =
+  | ToBe
+  | Available
+  | Sold
+  
+let one_msg = 
+  fun (msg : Message) => 
+    let nil_msg = Nil {Message} in
+    Cons {Message} msg nil_msg
+
+let two_msgs =
+  fun (msg1 : Message) =>
+  fun (msg2 : Message) =>
+    let msgs_tmp = one_msg msg2 in
+    Cons {Message} msg1 msgs_tmp
+
+contract Item
+()
+
+field state           : StateType = ToBe
+
+field name            : String = empty_String
+field price           : Uint32 =  zero
+
+field seller_Address  : ByStr20 = zero_address
+field party_A         : ByStr20 = zero_address
+field party_B         : ByStr20 = zero_address
+field parent_Contract : ByStr20 = zero_address
+
+transition set_Item(item_Name: String, item_Price: Uint32, seller: ByStr20, partyA: ByStr20, partyB: ByStr20)
+  l_state <- state;
+  match l_state with
+   | ToBe =>
+    is_Price_Valid = uint32_gt item_Price zero;
+     match is_Price_Valid with
+      | True =>
+        name  := item_Name;
+        price := item_Price;
+        
+        l_Result_State = Available;
+        state := l_Result_State;
+        
+        party_A := partyA;
+        party_B := partyB;
+        
+        seller_Address  := seller;
+        parent_Contract := _sender;
+        e = {_eventname : "set_Item"; code : success_code };
+        event e
+      | False =>
+       e = {_eventname : "set_Item"; code : fail_code };
+       event e
+     end
+    | _ =>
+     e = {_eventname : "set_Item"; code : fail_code };
+     event e
+  end
+end
+
+
+transition buy_Item()
+ l_seller <- seller_Address;
+ is_seller = builtin eq l_seller _sender;
+  match is_seller with
+   | True =>
+    e = {_eventname : "buy_Item"; code : fail_code };
+    event e
+   | False =>
+    l_party_A <- party_A;
+    l_party_B <- party_B;
+    is_A = builtin eq l_party_A _sender;
+    is_B = builtin eq l_party_B _sender;
+    is_seller_either = orb is_A is_B;
+    match is_seller_either with
+     | False =>
+       e = {_eventname : "buy_Item"; code : fail_code };
+      event e
+     | True =>
+      l_state <- state;
+      match l_state with
+       | Available =>
+        accept; 
+        
+        l_Result_State = Sold;
+        state := l_Result_State;
+        
+        match is_A with
+         | False =>
+          msg = { _tag : ""; _recipient : l_party_B; _amount : _amount };
+          msgs = one_msg msg;
+          send msgs
+         | True => 
+          msg = { _tag : ""; _recipient : l_party_A; _amount : _amount };
+          msgs = one_msg msg;
+          send msgs
+         end
+       | _ =>
+        e = {_eventname : "buy_Item"; code : fail_code };
+        event e
+      end
+    end
+  end
+end

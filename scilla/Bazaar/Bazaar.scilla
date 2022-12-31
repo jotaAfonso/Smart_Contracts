@@ -1,0 +1,51 @@
+scilla_version 0
+
+import BoolUtils IntUtils ListUtils
+
+library Bazaar
+
+let zero_address = 0x0000000000000000000000000000000000000000
+
+let fail_code     = Uint32 1
+let success_code  = Uint32 2
+
+type StateType =
+  | Provisioned
+  | Listed
+  | Finalized
+  
+let one_msg = 
+  fun (msg : Message) => 
+    let nil_msg = Nil {Message} in
+    Cons {Message} msg nil_msg
+
+contract Bazaar
+(
+  party_A_param               : ByStr20,
+  party_B_param               : ByStr20,
+  item_Listing_template_param : ByStr20
+)
+
+field party_A               : ByStr20 = party_A_param
+field party_B               : ByStr20 = party_B_param
+field state                 : StateType = Provisioned
+field bazaar_maintainer     : ByStr20  = party_A_param
+
+transition list_Item(item_name_param: String, item_price_param: Uint32)
+  is_A = builtin eq party_A_param _sender;
+  is_B = builtin eq party_B_param _sender;
+  is_either = orb is_A is_B;
+    match is_either with
+      | True =>
+        l_Result_State = Listed;
+        state := l_Result_State;
+        msg = { _tag : "set_Item"; _recipient : item_Listing_template_param; _amount : Uint128 0;
+          item_Name : item_name_param; item_Price : item_price_param; seller : _sender;
+          partyA : party_A_param; partyB : party_B_param; };
+        msgs = one_msg msg;
+        send msgs
+      | False =>
+        e = {_eventname : "set_Item"; code : fail_code };
+        event e
+    end
+end
