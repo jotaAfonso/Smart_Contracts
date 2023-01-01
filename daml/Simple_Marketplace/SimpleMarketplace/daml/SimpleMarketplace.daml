@@ -1,0 +1,78 @@
+module SimpleMarketplace where
+
+type MarketId = ContractId Market
+
+data StateType 
+  = ItemAvailable  
+  | OfferPlaced 
+  | Accepted 
+    deriving (Eq, Show)
+
+template Market
+  with 
+    owner       : Party
+    buyer       : Party
+    description : Text
+    askingPrice : Int
+    offerPrice  : Int
+    state       : StateType
+
+  where
+    signatory owner 
+    ensure owner /= buyer 
+      && description /= ""
+      && askingPrice > 0    
+    observer buyer
+
+    choice MakeOffer : MarketId
+      with  
+        offerPriceParam  : Int
+      controller buyer
+      do 
+        assertMsg "Item is not available for an offer." (this.state == ItemAvailable)
+        assertMsg "Offer too low." (offerPriceParam > this.askingPrice)
+        assertMsg "Offer invalid." (offerPriceParam > 0)
+          
+        create Market with
+            offerPrice = offerPriceParam
+            state = OfferPlaced
+            ..
+
+    choice AcceptOffer : MarketId
+      controller owner
+      do 
+        assertMsg "Offer was not placed." (this.state == OfferPlaced)
+        create this with
+          state = Accepted
+              
+    choice RejectOffer : MarketId
+      controller owner
+      do 
+        assertMsg "Invalid state of contract." (this.state == OfferPlaced)
+        create Market with
+          offerPrice = 0
+          state = ItemAvailable
+          ..
+
+{-
+template MarketApp
+  with 
+    owner       : Party
+    description : Text
+    askingPrice : Int
+    buyer       : Party
+  where
+    signatory owner 
+    observer buyer
+    choice Build : MarketId
+      controller owner
+      do
+        create Market 
+          with
+            owner = this.owner
+            description = this.description
+            askingPrice = this.askingPrice
+            state = ItemAvailable
+            buyer = this.buyer
+            offerPrice = 0
+-}
