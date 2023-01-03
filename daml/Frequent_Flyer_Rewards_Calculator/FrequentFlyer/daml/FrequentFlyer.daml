@@ -1,0 +1,65 @@
+module FrequentFlyer where
+
+type FrequentFlyerId = ContractId FrequentFlyer
+
+data FlyerStateType 
+  = SetFlyerReward   
+  | MilesAdded
+    deriving (Eq, Show)
+
+data TotalRewardsState 
+  = Behind   
+  | UpToDate
+    deriving (Eq, Show)
+
+template FrequentFlyer
+  with 
+    flyer       : Party
+    airlineRep  : Party
+    rewardsPMile: Int
+    miles       : [Int]
+    state       : FlyerStateType
+    rewardsState: TotalRewardsState
+    totalRewards: Int
+  where
+    signatory airlineRep 
+    ensure flyer /= airlineRep 
+    observer flyer
+    choice AddMiles : FrequentFlyerId
+      with
+        millesAdd : [Int]
+      controller flyer
+      do          
+          create this with
+              miles = (++) millesAdd this.miles
+              state = MilesAdded
+              rewardsState = Behind
+    choice ComputeTotalRewards : FrequentFlyerId 
+      controller flyer
+      do 
+          assertMsg "Invalid state of contract." (this.state == MilesAdded)
+          create this with
+              totalRewards = sum (fmap (*this.rewardsPMile) miles) 
+              rewardsState = UpToDate
+
+
+template FrequentFlyerApp
+  with 
+    flyer       : Party
+    airlineRep  : Party
+    rewardsPMile: Int
+  where
+    signatory airlineRep 
+    observer flyer
+    choice Build : FrequentFlyerId
+      controller airlineRep
+      do
+        create FrequentFlyer 
+          with
+            flyer       = this.flyer
+            airlineRep  = this.airlineRep
+            rewardsPMile= this.rewardsPMile
+            miles       = []
+            state       = SetFlyerReward
+            rewardsState= UpToDate
+            totalRewards= 0

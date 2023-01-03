@@ -1,0 +1,68 @@
+module RoomThermostat where
+
+type RoomThermostatId = ContractId RoomThermostat
+
+data RoomStateType 
+  = CreatedState   
+  | InUseState 
+    deriving (Eq, Show)
+
+data ModeType 
+  = Off  
+  | On
+  | Heat
+  | Auto 
+    deriving (Eq, Show)
+
+template RoomThermostat
+  with 
+    owner       : Party
+    installer   : Party
+    mode        : ModeType
+    targetTemp  : Int
+    state       : RoomStateType
+  where
+    signatory owner 
+    ensure owner /= installer 
+    observer installer
+    choice StartThermostat : RoomThermostatId
+      controller installer
+      do 
+          assertMsg "Invalid State for operation." (this.state == CreatedState)          
+          create this with
+              state = InUseState
+    choice SetTargetTemperature : RoomThermostatId 
+      with
+        temp  : Int
+      controller owner
+      do 
+          assertMsg "Invalid State for operation." (this.state == InUseState)
+          create this with
+              targetTemp = temp
+    choice SetMode : RoomThermostatId
+      with
+        targetMode : ModeType
+      controller owner
+      do 
+          assertMsg "Invalid State for operation." (this.state == InUseState)
+          create this with
+              mode = targetMode
+
+template RoomThermostatApp
+  with 
+    owner       : Party
+    installer   : Party
+    targetTemp  : Int
+  where
+    signatory owner 
+    observer installer
+    choice Build : RoomThermostatId
+      controller installer
+      do
+        create RoomThermostat 
+          with
+            owner = this.owner
+            installer = this.installer
+            targetTemp = this.targetTemp
+            mode = Off
+            state = CreatedState

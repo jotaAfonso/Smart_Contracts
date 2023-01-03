@@ -1,0 +1,32 @@
+module Main where
+
+import BasicProvinance
+import Daml.Script
+
+setup : Script ProvinanceId
+setup = script do    
+-- user_setup_begin
+  alice <- allocateParty "Alice"
+  bob <- allocateParty"Bob" 
+-- user_setup_end
+
+  test <- submit alice do
+    createCmd ProvinanceApp with
+      initiater = alice
+      chainOwner = alice
+      chainObserver = bob
+
+  test <- submit alice do
+    exerciseCmd test Build
+    
+  test <- submit alice do
+    exerciseCmd test TransferResponsibility with newCounter = bob
+
+  test <- submit bob do
+    exerciseCmd test TransferResponsibility with newCounter = alice
+
+  test <- submit alice do
+    exerciseCmd test TransferResponsibility with newCounter = bob
+
+  submit alice do
+    exerciseCmd test Complete

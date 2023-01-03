@@ -1,0 +1,27 @@
+module Main where
+
+import Daml.Script
+import RoomThermostat
+
+setup : Script RoomThermostatId
+setup = script do    
+  alice <- allocateParty "Alice"
+  bob <- allocateParty"Bob" 
+
+  test <- submit alice do
+      createCmd RoomThermostatApp with
+        owner = alice
+        installer = bob
+        targetTemp = 70
+
+  test <- submit bob do
+    exerciseCmd test Build
+
+  test <- submit bob do
+    exerciseCmd test StartThermostat
+
+  test <- submit alice do
+    exerciseCmd test SetTargetTemperature with temp = 30
+
+  submit alice do
+    exerciseCmd test SetMode with targetMode = Auto

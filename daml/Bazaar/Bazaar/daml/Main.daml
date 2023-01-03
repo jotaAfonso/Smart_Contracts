@@ -1,0 +1,12 @@
+module Main where
+
+import Daml.Script
+import Bazaar
+
+setup : Script (ContractId BazaarApp)
+setup = script do    
+  alice <- allocateParty "Alice" 
+  bob <- allocateParty"Bob" 
+
+  submit alice do 
+    createCmd BazaarApp with seller = alice, buyer = bob

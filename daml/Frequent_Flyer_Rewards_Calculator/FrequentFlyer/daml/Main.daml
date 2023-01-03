@@ -1,0 +1,34 @@
+module Main where
+
+import FrequentFlyer
+import Daml.Script
+
+setup : Script FrequentFlyerId
+setup = script do    
+  alice <- allocateParty "Alice" 
+  bob <- allocateParty "Bob" 
+
+  test <- submit bob do
+      createCmd FrequentFlyerApp with
+        flyer = alice
+        airlineRep = bob
+        rewardsPMile = 10
+
+  test <- submit bob do
+    exerciseCmd test Build
+
+  test <- submit alice do
+    exerciseCmd test AddMiles with millesAdd = [1]
+
+  test <- submit alice do
+    exerciseCmd test AddMiles with millesAdd = [2]
+
+  test <- submit alice do
+    exerciseCmd test ComputeTotalRewards
+
+  test <- submit alice do
+    exerciseCmd test AddMiles with millesAdd = [3]
+  
+  submit alice do
+    exerciseCmd test ComputeTotalRewards
+  

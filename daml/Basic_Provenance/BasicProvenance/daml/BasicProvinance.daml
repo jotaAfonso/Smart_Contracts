@@ -1,0 +1,60 @@
+module BasicProvinance where
+
+type ProvinanceId = ContractId Provinance
+
+data ProvinanceStateType 
+  = CreatedState   
+  | InTransitState
+  | CompletedState
+    deriving (Eq, Show)
+
+template Provinance
+  with 
+    initiater       : Party
+    counter         : Party
+    previouscounter : Party
+    chainOwner      : Party
+    chainObserver   : Party
+    state           : ProvinanceStateType
+  where
+    signatory initiater
+    observer counter
+    choice TransferResponsibility : ProvinanceId
+      with
+        newCounter : Party
+      controller counter
+      do          
+          assertMsg "Invalid state of contract." (this.state /= CompletedState)
+          create this with
+              previouscounter = this.counter
+              counter = newCounter
+              state = InTransitState
+    choice Complete : ProvinanceId 
+      controller chainOwner
+      do 
+          assertMsg "Invalid state of contract." (this.state /= CompletedState)
+          create this with
+              previouscounter = this.counter
+              counter = this.chainOwner
+              state = CompletedState
+
+
+template ProvinanceApp
+  with 
+    initiater       : Party
+    chainOwner      : Party
+    chainObserver   : Party
+  where
+    signatory initiater 
+    choice Build : ProvinanceId
+      controller initiater
+      do
+        create Provinance 
+          with
+            initiater       = this.initiater
+            counter         = this.initiater
+            previouscounter = this.initiater
+            chainOwner      = this.chainOwner
+            chainObserver   = this.chainObserver
+            state           = CreatedState
+

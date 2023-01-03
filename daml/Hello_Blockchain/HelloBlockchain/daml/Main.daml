@@ -1,0 +1,24 @@
+module Main where
+
+import Daml.Script
+import HelloBlockchain
+
+setup : Script HelloBlockChainId
+setup = script do    
+  alice <- allocateParty"Alice"
+  bob <- allocateParty "Bob" 
+
+  helloB <- submit alice do
+      createCmd HelloBlockChainApp with
+        requestor = alice
+        responder = bob
+        msg       = "Test"
+
+  helloB <- submit alice do
+    exerciseCmd helloB Build
+
+  helloB <- submit bob do
+    exerciseCmd helloB SendResponse with newmsg = "Test response"
+
+  submit alice do
+    exerciseCmd helloB SendRequest with newmsg = "Test request"

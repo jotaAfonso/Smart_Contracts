@@ -1,0 +1,55 @@
+module HelloBlockchain where
+
+type HelloBlockChainId = ContractId HelloBlockChain
+
+data HelloStateType 
+  = Request 
+  | Respond
+    deriving (Eq, Show)
+
+template HelloBlockChain
+  with 
+    requestor : Party
+    responder : Party
+    state     : HelloStateType
+    msg       : Text
+  where
+    signatory requestor 
+    ensure msg /= ""  && requestor /= responder
+    observer responder
+    choice SendResponse : HelloBlockChainId
+      with  
+        newmsg  : Text
+      controller responder
+      do
+          assertMsg "Invalid State" (this.state /= Respond) 
+          create this with
+            msg = newmsg
+            state = Respond
+    choice SendRequest : HelloBlockChainId
+      with  
+        newmsg  : Text
+      controller requestor
+      do 
+          assertMsg "Invalid State" (this.state /= Request)
+          create this with
+              msg = newmsg
+              state = Request
+
+template HelloBlockChainApp
+  with 
+    requestor : Party
+    responder : Party
+    msg       : Text
+  where
+    signatory requestor 
+    observer responder
+    choice Build : HelloBlockChainId
+      controller requestor
+      do
+        create HelloBlockChain 
+          with
+            requestor = this.requestor
+            responder = this.responder
+            state = Request
+            msg = this.msg
