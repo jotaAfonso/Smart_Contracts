@@ -4,8 +4,6 @@ scilla_version 0
 (*               Associated library                *)
 (***************************************************)
 
-import BoolUtils as BoolU
-
 library Auction
 
 let one_msg = 
@@ -30,6 +28,7 @@ type Error =
   | AuctionOver
   | IsHighestBidder
   | InvalidState (* Generic one *)
+  | NotOwner
   
 let make_sucess_message =
   fun (result : Sucess) =>
@@ -52,13 +51,29 @@ let make_error =
       | AuctionOver           => Int32 -4
       | IsHighestBidder       => Int32 -5
       | InvalidState          => Int32 -6
+      | NotOwner              => Int32 -7
       end
     in
     { _exception : "Error"; code : result_code }
 
-(***************************************************)
 (*             The contract definition             *)
-(***************************************************)
+(* 
+  Context: Contract simulates an Auction, 
+  having the following transitions:
+  Bid (bids an amoutn), Withdraw(withdraws pending returns), 
+  AuctionEnd(terminates the auction)
+  cycle between bid and withdraw, until the auction ends
+*)
+(*
+  transitions example:
+  state { transition : resulting_state}
+  Idle { Bid : Bidding; AuctionEnd : Closed }
+  Bid { Withdraw : Idle; AuctionEnd : Closed }
+  Closed {}
+*)
+(*
+  Changes 
+*)
 
 contract Auction
 (
@@ -83,7 +98,67 @@ procedure CreateEventSuccess(suc : Sucess)
   event e
 end
 
-(* Bidding on the auction, if auction is has not ended and the bid sent is higher than the current highest bid *)
+(* Checks if the sender is the same as the passed address  *)
+procedure RequireOwner(address: ByStr20)
+  is_owner = builtin eq _sender address;
+  match is_owner with
+  | True => (* Noop *)
+  | False =>
+    error = NotOwner;
+    ThrowError error
+  end
+end
+
+procedure WithdrawAuxValue(stateResult : StateType, valueToReturn : Uint128) 
+  delete pendingReturns[_sender];
+      
+  suc = MoneySent;
+  CreateEventSuccess suc;
+  
+  l_Result_State = stateResult;
+  state := l_Result_State;
+  
+  msg  = {_tag : "AddFunds"; _recipient : _sender; _amount : valueToReturn};
+  msgs = one_msg msg;
+  send msgs
+end
+
+procedure WithdrawAuxState(stateResult : StateType)
+  pr <- pendingReturns[_sender];
+  match pr with
+    
+  | None =>
+    err = NothingToWithdraw;
+    ThrowError err
+  
+  | Some v =>
+    WithdrawAuxValue stateResult v
+    
+  end
+end
+
+(* Bidders getting refunds, if bidder has a pending return *)
+transition Withdraw ()
+  
+  l_state <- state;
+  match l_state with
+  
+  | Start =>
+    err = InvalidState;
+    ThrowError err
+    
+  | Closed =>
+    l_Result_State = Closed;
+    WithdrawAuxState l_Result_State
+  
+  | Bid =>
+    l_Result_State = Start;
+    WithdrawAuxState l_Result_State
+  
+  end
+end
+
+(* Bidding on the auction, auction is in idle state and the bid sent is higher than the current highest bid *)
 transition Bid ()
   l_state <- state;
   match l_state with
@@ -162,72 +237,28 @@ transition Bid ()
     ThrowError err
   end
 end  
- 
- 
-(* Bidders getting refunds, if bidder has a pending return *)
-transition Withdraw ()
-  
-  l_state <- state;
-  match l_state with
-  
-  | Start =>
-    err = InvalidState;
-    ThrowError err
-  
-  | _ =>
-    pr <- pendingReturns[_sender];
-    match pr with
-      
-    | None =>
-      err = NothingToWithdraw;
-      ThrowError err
-    
-    | Some v =>
-      delete pendingReturns[_sender];
-      
-      suc = MoneySent;
-      CreateEventSuccess suc;
-      
-      l_Result_State = Start;
-      state := l_Result_State;
-      
-      msg  = {_tag : ""; _recipient : _sender; _amount : v};
-      msgs = one_msg msg;
-      send msgs
-    end
-  end 
-end
 
-
-(* Ends Auction, if the transaction sender is the owner and the contract is still live. *)
+(* Ends Auction, if the transaction sender is the beneficiary and the contract is still live. *)
 transition AuctionEnd ()
 
-  (* Checks if sender is the owner *)
-  is_owner = builtin eq beneficiary _sender;
-  match is_owner with
-    | True => 
+  (* Checks if sender is the beneficiary *)
+  RequireOwner beneficiary;
+  l_state <- state;
+  match l_state with
+  | Closed =>
+    err = AuctionOver;
+    ThrowError err
     
-      l_state <- state;
-      match l_state with
-      | Closed =>
-        err = AuctionOver;
-        ThrowError err
-        
-      | _ =>
-        l_Result_State = Closed;
-        state := l_Result_State;
-        
-        l_highestBid <- highestBid;
-        e = {_eventname: "Auction ended."; highest_bid: l_highestBid};
-        event e;
-        
-        msg  = {_tag : ""; _recipient : beneficiary; _amount : l_highestBid};
-        msgs = one_msg msg;
-        send msgs
-        
-      end
-    | False => 
-      err = AuctionOver;
-      ThrowError err
+  | _ =>
+    l_Result_State = Closed;
+    state := l_Result_State;
+    
+    l_highestBid <- highestBid;
+    e = {_eventname: "Auction ended."; highest_bid: l_highestBid};
+    event e;
+    
+    msg  = {_tag : "AddFunds"; _recipient : beneficiary; _amount : l_highestBid};
+    msgs = one_msg msg;
+    send msgs
   end
 end
