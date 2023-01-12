@@ -1,117 +1,205 @@
 scilla_version 0
 
-import BoolUtils IntUtils ListUtils
+import IntUtils BoolUtils
 
 library Item
 
 let zero_address = 0x0000000000000000000000000000000000000000
 let empty_String = "" 
 
-let zero         = Uint32 0
+let zero         = Uint128 0
 
-let fail_code     = Uint32 1
-let success_code  = Uint32 2
+type Sucess =
+  | ItemRegistered
+  | ItemBought
+  
+type Error =
+  | PriceInvalid
+  | ItemAlreadyRegistered
+  | BuyerCannotBeSeller
+  | BuyerHasToBeOneOfTheParties
+  | NoItemRegisteredToBuy
+  
+let make_sucess_message =
+  fun (result : Sucess) =>
+    let result_code = 
+      match result with
+      | ItemRegistered   => Int32 1
+      | ItemBought       => Int32 2
+      end
+    in
+    {_eventname: "Bid accepted."; code: result_code} 
+  
+let make_error =
+  fun (result : Error) =>
+    let result_code = 
+      match result with
+      | PriceInvalid                  => Int32 -1
+      | ItemAlreadyRegistered         => Int32 -2
+      | BuyerCannotBeSeller           => Int32 -3
+      | BuyerHasToBeOneOfTheParties   => Int32 -4
+      | NoItemRegisteredToBuy         => Int32 -4
+      end
+    in
+    { _exception : "Error"; code : result_code }
 
 type StateType =
-  | ToBe
-  | Available
-  | Sold
+  | ToBe (* empty item *)
+  | Available (* item registered *)
   
 let one_msg = 
   fun (msg : Message) => 
     let nil_msg = Nil {Message} in
     Cons {Message} msg nil_msg
 
-let two_msgs =
-  fun (msg1 : Message) =>
-  fun (msg2 : Message) =>
-    let msgs_tmp = one_msg msg2 in
-    Cons {Message} msg1 msgs_tmp
-
+(*
+  item registered by a seller bounding two exclusive parties to the contract,
+  the seller and the buyer;
+  a party can register a item and the other can buy it
+*)
 contract Item
 ()
 
 field state           : StateType = ToBe
 
 field name            : String = empty_String
-field price           : Uint32 =  zero
+field price           : Uint128 =  zero
 
 field seller_Address  : ByStr20 = zero_address
 field party_A         : ByStr20 = zero_address
 field party_B         : ByStr20 = zero_address
-field parent_Contract : ByStr20 = zero_address
 
-transition set_Item(item_Name: String, item_Price: Uint32, seller: ByStr20, partyA: ByStr20, partyB: ByStr20)
+(* Emit Errors *)
+procedure ThrowError(err : Error)
+  e = make_error err;
+  throw e
+end
+
+(* Logs Event *)
+procedure CreateEventSuccess(suc : Sucess)
+  e = make_sucess_message suc;
+  event e
+end
+
+(* Checks if the price is positive *)
+procedure isPriceValid(item_Price : Uint128, valueToCompare : Uint128)
+  is_Price_Valid = uint128_gt item_Price valueToCompare;
+  match is_Price_Valid with
+  | True => (* Noop *)
+  | False =>
+    error = PriceInvalid;
+    ThrowError error
+  end
+end
+
+(* 
+  registers  an item, indicating its name
+  and price the seller/owner of the item,
+  and the parties involved on the transaction;
+  one of them being the seller.  
+*)
+transition set_Item(item_Name: String, item_Price: Uint128, seller: ByStr20, partyA: ByStr20, partyB: ByStr20)
   l_state <- state;
   match l_state with
    | ToBe =>
-    is_Price_Valid = uint32_gt item_Price zero;
-     match is_Price_Valid with
-      | True =>
-        name  := item_Name;
-        price := item_Price;
-        
-        l_Result_State = Available;
-        state := l_Result_State;
-        
-        party_A := partyA;
-        party_B := partyB;
-        
-        seller_Address  := seller;
-        parent_Contract := _sender;
-        e = {_eventname : "set_Item"; code : success_code };
-        event e
-      | False =>
-       e = {_eventname : "set_Item"; code : fail_code };
-       event e
-     end
+    isPriceValid item_Price zero;
+    name  := item_Name;
+    price := item_Price;
+    
+    l_Result_State = Available;
+    state := l_Result_State;
+    
+    party_A := partyA;
+    party_B := partyB;
+    
+    seller_Address  := seller;
+    
+    suc = ItemRegistered;
+    CreateEventSuccess suc
     | _ =>
-     e = {_eventname : "set_Item"; code : fail_code };
-     event e
+      error = ItemAlreadyRegistered;
+      ThrowError error
   end
 end
 
 
-transition buy_Item()
- l_seller <- seller_Address;
- is_seller = builtin eq l_seller _sender;
+(* if sender is the seller, throws error  *)
+procedure IsSenderSeller()
+  l_seller <- seller_Address;
+  is_seller = builtin eq l_seller _sender;
   match is_seller with
-   | True =>
-    e = {_eventname : "buy_Item"; code : fail_code };
-    event e
-   | False =>
-    l_party_A <- party_A;
-    l_party_B <- party_B;
+  | False => (* Noop *)
+  | True =>
+    error = BuyerCannotBeSeller;
+    ThrowError error
+  end
+end
+
+(* if sender is not one of the parties involved, throws error *)
+procedure IsSenderEitherParty(l_party_A: ByStr20, l_party_B: ByStr20)
+  is_A = builtin eq l_party_A _sender;
+  is_B = builtin eq l_party_B _sender;
+  is_seller_either = orb is_A is_B;
+  match is_seller_either with
+  | True => (* Noop *)
+  | False =>
+    error = BuyerHasToBeOneOfTheParties;
+    ThrowError error
+  end
+end  
+
+(* 
+  buying the item, only available if the sender is 
+  one of the two parties involved and not the seller,
+  there also needs to be an item available to buy
+*)
+transition buy_Item()
+  (* Checks if it is the seller, if it is then throw error *)
+  IsSenderSeller;
+  
+  (* Checks if it is one of the two parties involved, if it is not then throw error *)
+  l_party_A <- party_A;
+  l_party_B <- party_B;
+  IsSenderEitherParty l_party_A l_party_B;
+  
+  l_state <- state;
+  match l_state with
+   (* There needs to be an item available to continue *)
+   | Available =>
+     
+    (* Checks if the amount is greater than the price of the item *)
+    l_price <- price; 
+    isPriceValid _amount l_price;
+    accept; 
+    
+    (* resets the item *)
+    l_Result_State = ToBe;
+    state := l_Result_State;
+    
+    (* 
+      updates the balance of the seller, with the amount received
+      ps not refusing if the amount sent is higher than the price 
+    *)
     is_A = builtin eq l_party_A _sender;
-    is_B = builtin eq l_party_B _sender;
-    is_seller_either = orb is_A is_B;
-    match is_seller_either with
+    match is_A with
+      
      | False =>
-       e = {_eventname : "buy_Item"; code : fail_code };
-      event e
-     | True =>
-      l_state <- state;
-      match l_state with
-       | Available =>
-        accept; 
-        
-        l_Result_State = Sold;
-        state := l_Result_State;
-        
-        match is_A with
-         | False =>
-          msg = { _tag : ""; _recipient : l_party_B; _amount : _amount };
-          msgs = one_msg msg;
-          send msgs
-         | True => 
-          msg = { _tag : ""; _recipient : l_party_A; _amount : _amount };
-          msgs = one_msg msg;
-          send msgs
-         end
-       | _ =>
-        e = {_eventname : "buy_Item"; code : fail_code };
-        event e
-      end
-    end
+      (* It is false meaning that the sender is party B, so party A is the seller *)
+      msg = { _tag : "AddFunds"; _recipient : l_party_A; _amount : _amount };
+      msgs = one_msg msg;
+      send msgs
+     
+     | True => 
+      (* It is true meaning that the sender is party A, so party B is the seller *)
+      msg = { _tag : "AddFunds"; _recipient : l_party_B; _amount : _amount };
+      msgs = one_msg msg;
+      send msgs
+     end;
+     
+    suc = ItemBought;
+    CreateEventSuccess suc
+   | _ =>
+    error = NoItemRegisteredToBuy;
+    ThrowError error
   end
 end

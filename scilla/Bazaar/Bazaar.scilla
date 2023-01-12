@@ -1,24 +1,50 @@
 scilla_version 0
 
-import BoolUtils IntUtils ListUtils
+import BoolUtils
 
 library Bazaar
-
-let zero_address = 0x0000000000000000000000000000000000000000
-
-let fail_code     = Uint32 1
-let success_code  = Uint32 2
 
 type StateType =
   | Provisioned
   | Listed
-  | Finalized
+
+type Sucess =
+  | ItemRegistered
+  
+type Error =
+  | SenderNeedsToBeInvolved
+  
+let make_sucess_message =
+  fun (result : Sucess) =>
+    let result_code = 
+      match result with
+      | ItemRegistered   => Int32 1
+      end
+    in
+    {_eventname: "Bid accepted."; code: result_code} 
+  
+let make_error =
+  fun (result : Error) =>
+    let result_code = 
+      match result with
+      | SenderNeedsToBeInvolved    => Int32 -1
+      end
+    in
+    { _exception : "Error"; code : result_code }
+  
   
 let one_msg = 
   fun (msg : Message) => 
     let nil_msg = Nil {Message} in
     Cons {Message} msg nil_msg
 
+(* 
+  two partys bound by a smart contract,
+  enabling each party to list an item so that the other can buy it  
+*)
+(* transistions path:
+  list_Item -> set_Item;
+*)
 contract Bazaar
 (
   party_A_param               : ByStr20,
@@ -26,26 +52,55 @@ contract Bazaar
   item_Listing_template_param : ByStr20
 )
 
-field party_A               : ByStr20 = party_A_param
-field party_B               : ByStr20 = party_B_param
-field state                 : StateType = Provisioned
-field bazaar_maintainer     : ByStr20  = party_A_param
+field state   : StateType = Provisioned
 
-transition list_Item(item_name_param: String, item_price_param: Uint32)
+(* Emit Errors *)
+procedure ThrowError(err : Error)
+  e = make_error err;
+  throw e
+end
+
+(* Logs Event *)
+procedure CreateEventSuccess(suc : Sucess)
+  e = make_sucess_message suc;
+  event e
+end
+
+(* if sender is not one of the parties involved, throws error *)
+procedure IsSenderEitherParty()
   is_A = builtin eq party_A_param _sender;
   is_B = builtin eq party_B_param _sender;
   is_either = orb is_A is_B;
-    match is_either with
-      | True =>
-        l_Result_State = Listed;
-        state := l_Result_State;
-        msg = { _tag : "set_Item"; _recipient : item_Listing_template_param; _amount : Uint128 0;
-          item_Name : item_name_param; item_Price : item_price_param; seller : _sender;
-          partyA : party_A_param; partyB : party_B_param; };
-        msgs = one_msg msg;
-        send msgs
-      | False =>
-        e = {_eventname : "set_Item"; code : fail_code };
-        event e
-    end
+  match is_either with
+  | True => (* Noop *)
+  | False =>
+    error = SenderNeedsToBeInvolved;
+    ThrowError error
+  end
+end
+
+(* 
+  registers an item, providing the: 
+  seller wich is the sender of the transition,
+  the two parties involved in the contract,
+  the price and name of item,
+  and the address of the item listing contract
+*)
+transition list_Item(item_name_param: String, item_price_param: Uint128)
+  (* Checks if sender is involved in the contract *)
+  IsSenderEitherParty;
+  
+  (* Records that at least one item has been registered *)
+  l_Result_State = Listed;
+  state := l_Result_State;
+  
+  (* registers item by calling a transition in Item.scilla contract *)
+  msg = { _tag : "set_Item"; _recipient : item_Listing_template_param; _amount : Uint128 0;
+    item_Name : item_name_param; item_Price : item_price_param; seller : _sender;
+    partyA : party_A_param; partyB : party_B_param };
+  msgs = one_msg msg;
+  send msgs;
+  
+  suc = ItemRegistered;
+  CreateEventSuccess suc
 end
