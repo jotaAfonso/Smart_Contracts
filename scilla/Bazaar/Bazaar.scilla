@@ -39,7 +39,7 @@ let one_msg =
     Cons {Message} msg nil_msg
 
 (* 
-  two partys bound by a smart contract,
+  two parties bound by a smart contract,
   enabling each party to list an item so that the other can buy it  
 *)
 (* transistions path:
