@@ -67,14 +67,11 @@ let make_error =
 (*
   transitions example:
   state { transition : resulting_state}
+  -------
   Idle { Bid : Bidding; AuctionEnd : Closed }
   Bid { Withdraw : Idle; AuctionEnd : Closed }
   Closed {}
 *)
-(*
-  Changes 
-*)
-
 contract Auction
 (
   beneficiary  : ByStr20

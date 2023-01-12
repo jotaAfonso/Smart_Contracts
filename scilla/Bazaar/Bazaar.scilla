@@ -42,8 +42,13 @@ let one_msg =
   two parties bound by a smart contract,
   enabling each party to list an item so that the other can buy it  
 *)
-(* transistions path:
-  list_Item -> set_Item;
+(*
+  transitions example:
+  state { transition : resulting_state}
+  -------
+  Provisioned { list_Item : Listed }
+  Listed { list_Item : Listed }
+  note: the list_Item calls the set_Item of the ItemListing.scilla
 *)
 contract Bazaar
 (

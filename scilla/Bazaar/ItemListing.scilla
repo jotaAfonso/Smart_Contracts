@@ -57,6 +57,13 @@ let one_msg =
   the seller and the buyer;
   a party can register a item and the other can buy it
 *)
+(*
+  transitions example:
+  state { transition : resulting_state}
+  -------
+  ToBe { set_Item : Available }
+  Available { buy_Item : ToBe }
+*)
 contract Item
 ()
 
