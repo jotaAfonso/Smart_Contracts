@@ -5,16 +5,19 @@ main contract Bazaar {
     state CreatedBazaar;
     state ItemListed;
 
-    Party@Owned seller;
-    Party@Owned buyer;
+    Party@Owned partyA;
+    Party@Owned partyB;
 
     string itemName;
     int itemPrice;
 
-
+    /*
+    two parties bound by a smart contract,
+    enabling each party to list an item so that the other can buy it    
+    */
     Bazaar@Owned(int sellerBalance, int buyerBalance, string name, int price) {
-        seller = new Party(sellerBalance);
-        buyer = new Party(buyerBalance);
+        partyA = new Party(sellerBalance);
+        partyB = new Party(buyerBalance);
 
         itemName = name;
         itemPrice = price;
@@ -22,8 +25,15 @@ main contract Bazaar {
         ->CreatedBazaar;
     } 
 
-    transaction listItem(Bazaar@Owned >> ItemListed this) {
-        Item i = new Item(itemName, itemPrice, seller);
+    /* 
+    registers an item, providing the: 
+    seller,
+    the two parties involved in the contract,
+    the price and name of item,
+    and the address of the item listing contract
+    */
+    transaction listItem(Bazaar@Owned >> ItemListed this, Party@Owned partySeller) {
+        Item i = new Item(itemName, itemPrice, partySeller, partyA, partyB);
         -> ItemListed;
    }
 }

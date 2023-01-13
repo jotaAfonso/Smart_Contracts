@@ -14,12 +14,12 @@ main contract Party {
         } 
     }
 
+    // updates balance
     transaction updateBalance(int itemPrice) {
-        if (balance + itemPrice > 0){
-            balance = balance + itemPrice;
-        }            
+        balance = balance + itemPrice;           
     }
 
+    // obtains balance
     transaction getBalance(Party@Owned this) returns int {
         return balance;
     }

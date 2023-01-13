@@ -1,5 +1,3 @@
-//English Auction
-
 contract Bidder {
     string name;
     int bidAmount;
@@ -77,13 +75,22 @@ main contract Auction {
         Bidder@Owned winner;        
     }
 
-
-
+    /*
+        Context: Contract simulates an Auction, 
+        having the following transitions:
+        Bid (bids an amoutn), Withdraw(withdraws pending returns), 
+        AuctionEnd(terminates the auction)
+        checksWinner (checks if the bidder param is the auction winner)
+        cycle between bid and withdraw, until the auction ends       
+    */
     Auction@Owned() {
         seller = new Seller();
         -> Open(maxBid = -1, maxBidder = new Bidder("none",0, 0));
     }
 
+    /*
+        Bidding on the auction
+    */
     transaction makeBid(Auction@Open >> (Open | Withdraw) this, Bidder@Bidding >> Unowned bidder) {
         if (bidder.getBidAmount() > maxBid) {
             if (maxBidder.getName() != bidder.getName()) {
@@ -92,6 +99,9 @@ main contract Auction {
         }
     }
 
+    /*
+        Bidder gets refunds, if bidder has a pending return
+    */
     transaction withdrawFunds(Auction@Withdraw >> (Open | Withdraw) this, Bidder@Bidding >> Unowned bidder) {
         if (refBidder.getName() != bidder.getName()) {
             refBidder.returnBidMoney(refAmount);
@@ -99,6 +109,9 @@ main contract Auction {
         }
     }
 
+    /*
+        updates the seller and buyer of the auction and terminates the auction         
+    */
     transaction endAuction(Auction@(Open | Withdraw) >> AuctionClosed this) {
         switch this {
             case Open {
@@ -117,11 +130,17 @@ main contract Auction {
         buyer.won();
     }
 
+    /*
+        checks if param bidder is the winner    
+    */
     transaction checkWinner(Auction@AuctionClosed this, Bidder@(Bidding | WonAuction) >> Unowned bidder) returns bool {
+        /*
+            in this regard we have to assume bidder name is unique,
+            perhaps changing to bidder != winner would be better         
+        */        
         if (winner.getName() != bidder.getName()) {
             return true;        
         }
         return false;
     }
-
 }

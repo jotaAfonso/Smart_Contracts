@@ -9,20 +9,47 @@ main contract Item {
     int itemPrice;
 
     Party@Unowned ownerSeller;
+    Party@Unowned partyA;
+    Party@Unowned partyB;
 
-    Item@Owned (string name, int price, Party@Unowned seller) {
+    /*
+        registers  an item, indicating its name
+        and price the seller/owner of the item,
+        and the parties involved on the transaction;
+        one of them has to be the seller. 
+    */
+    Item@Owned (string name, int price, Party@Unowned seller, Party@Unowned party_A, Party@Unowned party_B) {
         itemName = name;
         itemPrice = price;
         ownerSeller = seller;
+        partyA = party_A;
+        partyB = party_B;
         -> ItemAvailable;
     }
 
-    transaction finalizeSale(Item@ItemAvailable >> (ItemAvailable | ItemSold) this, Party@Owned buyer) {   
+    /*
+        buying the item, only available if buyer is not the seller 
+        and is one of the two parties involved,
+        the buyer also needs to have enough balance to buy the item
+    */
+    transaction finalizeSale(Item@ItemAvailable >> (ItemAvailable | ItemSold) this, Party@Unowned buyer) {   
+        // checks if the buyer is the owner, if it is stay in the same state
+        if (buyer == ownerSeller){
+            revert("Buyer is the seller, therefore it can not buy the item.");
+        }
+
+        // checks if buyer is one of the two parties involved, if it is not stay in the same state
+        if (buyer != partyA && buyer != partyB){
+            revert("Buyer is not one of the parties involved in the contract.");
+        }
+                
         switch buyer {
             case HasBalance {
+                // checks balance of buyer
                 if (buyer.getBalance() - itemPrice >= 0){
+                    // updates balance of seller and buyer
                     ownerSeller.updateBalance(itemPrice);
-                    buyer.updateBalance(itemPrice);
+                    buyer.updateBalance(-itemPrice);
                     ->ItemSold;
                 }
                 else {
@@ -30,8 +57,9 @@ main contract Item {
                 }
             }
             case EmptyBalance {
-                revert("");
+                revert("Buyer has no balance.");
             }
-        } 
+        }
+        
     }
 }
