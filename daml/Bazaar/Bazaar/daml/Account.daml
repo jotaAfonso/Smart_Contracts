@@ -1,0 +1,11 @@
+module Account where
+
+type AccountId = ContractId Account
+
+template Account
+  with 
+    account   : Party
+    balance   : Int
+  where
+    signatory account
+    observer account 

@@ -1,19 +1,10 @@
 module Bazaar where
 
+import Item
+import DA.List
+import Account
+
 type BazaarId = ContractId Bazaar
-type ItemListingId = ContractId ItemListing
-
-data AccountInfo 
-  = AccountInfo {
-    account : Party,
-    balance : Int 
-  } deriving (Eq, Show)
-
-data ItemInfo 
-  = ItemInfo {
-    name : Text,
-    price : Int 
-  } deriving (Eq, Show)
 
 data BazaarStateType 
   = PartyProvisioned   
@@ -21,75 +12,35 @@ data BazaarStateType
   | CurrentSaleFinalized
     deriving (Eq, Show)
 
-data ItemStateType 
-  = ItemAvailable   
-  | ItemSold
-    deriving (Eq, Show)
-
-template ItemListing
-  with
-    owner : AccountInfo
-    item  : ItemInfo
-    state : ItemStateType
-    bazar : BazaarId
-    buyer : AccountInfo
-  where 
-    signatory owner.account 
-    observer buyer.account 
-    choice BuyItem : ItemListingId
-      controller buyer.account
-      do 
-        assertMsg "Not enough funds." (this.item.price > this.buyer.balance)
-        exercise bazar UpdateBalance
-        create this with
-            state = ItemSold
-
 template Bazaar
   with 
-    seller        : AccountInfo
-    buyer         : AccountInfo
-    item          : ItemInfo
+    signatories   : [AccountId]
+    signatoriesP   : [Party]
     state         : BazaarStateType
   where
-    signatory seller.account
-    observer buyer.account 
-    choice Listing : BazaarId
-      controller buyer.account
-      do
-        newC <- create this with
-          state = ItemListed
+    signatory signatoriesP
+    ensure unique signatoriesP
+    observer signatoriesP 
 
-        item <- create ItemListing with 
-          owner = this.seller
-          item = this.item
+    -- creates an item listing
+    choice ListingItem : ItemListingId with seller : AccountId, sellerP : Party, priceName : Text, priceItem : Int
+      controller sellerP
+      do
+        seller_l <- fetch seller
+        assert (seller_l.account == sellerP)
+        -- assert (elem (seller_l) (this.signatories))
+        
+        -- changes state
+        create this with
+          state = ItemListed
+        
+        -- creates an ItemListing, with the owner, the parties involved (including owner),
+        -- item's name and price
+        create ItemListing with 
+          owner = seller_l
+          ownerAID = seller
+          partiesInvolvedP = signatoriesP
+          item = ItemInfo priceName priceItem
           state = ItemAvailable 
-          bazar = newC
-          buyer = this.buyer
-        -- imporve
-        create this with
-          state = ItemListed
-    choice UpdateBalance : BazaarId
-      controller buyer.account
-      do
-        create this with
-          seller = AccountInfo this.seller.account (this.seller.balance + this.item.price)
-          buyer = AccountInfo this.buyer.account (this.buyer.balance - this.item.price)
-          state = CurrentSaleFinalized
-    
 
-template BazaarApp
-  with 
-    seller        : Party
-    buyer         : Party
-  where
-    signatory seller 
-    observer buyer  
-    choice Build : BazaarId
-      controller seller
-      do
-        create Bazaar 
-          with
-            seller = AccountInfo seller 10
-            buyer = AccountInfo buyer 10
-            item = ItemInfo "ItemName" 5 
-            state = PartyProvisioned
+        

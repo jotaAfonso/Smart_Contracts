@@ -1,0 +1,111 @@
+module Auction where
+
+import Daml.Script
+import DA.Map
+
+type AuctionId = ContractId Auction
+
+data BidderInfo 
+  = BidderInfo {
+    bidder : Party,
+    currentBid : Int 
+  } deriving (Eq, Show)
+
+data AuctionStateType 
+  = StartedState   
+  | BiddingState
+  | WithdrawingState 
+  | AuctionClosedState
+    deriving (Eq, Show)
+
+template Auction
+  with 
+    beneficiary    : Party
+    currentHBidder : BidderInfo
+    pendingReturns : Map Party Int
+    state          : AuctionStateType
+    newBidder      : Party
+  where
+    signatory beneficiary 
+    ensure beneficiary /= currentHBidder.bidder 
+    observer currentHBidder.bidder
+    choice Bid : AuctionId
+      with
+        biddingAmount : Int
+      controller newBidder
+      do          
+          assertMsg "Invalid state of contract." (this.state == StartedState || this.state == WithdrawingState)
+          -- assertMsg "Cant bid while being the highest bidder." (newBidder /= currentHBidder.bidder)
+          assertMsg "Invalid bid, due to low value." (biddingAmount > currentHBidder.currentBid) 
+          
+          create this with
+              currentHBidder = BidderInfo newBidder biddingAmount
+              pendingReturns = insert this.currentHBidder.bidder this.currentHBidder.currentBid this.pendingReturns
+              state = BiddingState
+    
+    choice Withdraw : AuctionId 
+      controller newBidder
+      do 
+          assertMsg "Does not have pending returns." (member newBidder pendingReturns)
+          create this with
+              pendingReturns = insert this.currentHBidder.bidder 0 this.pendingReturns
+              state = WithdrawingState
+    
+    choice EndAuction : AuctionId 
+      controller beneficiary
+      do 
+          assertMsg "Invalid state of contract." (this.state /= AuctionClosedState)
+          create this with
+              state = AuctionClosedState
+
+template AuctionApp
+  with 
+    beneficiary   : Party
+    currentBidder : Party
+  where
+    signatory beneficiary 
+    observer currentBidder
+    choice Build : AuctionId
+      controller beneficiary
+      do
+        create Auction 
+          with
+            beneficiary    = this.beneficiary
+            currentHBidder = BidderInfo this.currentBidder 0
+            pendingReturns = empty
+            state          = StartedState 
+            newBidder      = this.currentBidder
+
+setup : Script AuctionId
+setup = script do    
+-- user_setup_begin
+  alice <- allocatePartyWithHint "Alice" (PartyIdHint "Alice")
+  bob <- allocatePartyWithHint "Bob" (PartyIdHint "Bob")
+  aliceId <- validateUserId "alice"
+  bobId <- validateUserId "bob"
+  createUser (User aliceId (Some alice)) [CanActAs alice]
+  createUser (User bobId (Some bob)) [CanActAs bob]
+-- user_setup_end
+
+  test <- submit alice do
+    createCmd AuctionApp with
+      beneficiary = alice
+      currentBidder = bob
+
+  test <- submit alice do
+    exerciseCmd test Build
+
+  test <- submit bob do
+    exerciseCmd test Bid with biddingAmount = 10
+  
+  test <- submit bob do
+    exerciseCmd test Withdraw
+    
+  test <- submit bob do
+    exerciseCmd test Bid with biddingAmount = 20
+  
+  test <- submit alice do
+    exerciseCmd test EndAuction
+
+  submit bob do
+    exerciseCmd test Withdraw

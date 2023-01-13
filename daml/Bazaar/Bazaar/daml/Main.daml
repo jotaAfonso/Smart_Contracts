@@ -2,11 +2,36 @@ module Main where
 
 import Daml.Script
 import Bazaar
+import Account
+import Item
 
-setup : Script (ContractId BazaarApp)
+setup : Script ()
 setup = script do    
   alice <- allocateParty "Alice" 
-  bob <- allocateParty"Bob" 
+  bob <- allocateParty "Bob" 
 
-  submit alice do 
-    createCmd BazaarApp with seller = alice, buyer = bob
+  accountAlice <- submit alice do 
+    createCmd Account with account = alice, balance = 10
+
+  accountBob <- submit bob do 
+    createCmd Account with account = bob, balance = 10
+
+  bazaar <- submitMulti [alice, bob] [] do
+    createCmd Bazaar with
+      signatories = [accountAlice, accountBob]
+      signatoriesP = [alice, bob]
+      state  = PartyProvisioned
+
+  item <- submit alice do
+    exerciseCmd bazaar ListingItem with 
+      seller = accountAlice
+      sellerP = alice
+      priceName =  "Name"
+      priceItem = 5
+
+  something <- submit bob do
+    exerciseCmd item BuyItem with 
+      buyer = accountBob
+      buyerP = bob
+
+  pure()

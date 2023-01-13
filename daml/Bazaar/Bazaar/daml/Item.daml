@@ -1,0 +1,55 @@
+module Item where
+
+import DA.List
+import Prelude
+import Account
+
+type ItemListingId = ContractId ItemListing
+
+data ItemInfo 
+  = ItemInfo {
+    name : Text,
+    price : Int 
+  } deriving (Eq, Show)
+
+data ItemStateType 
+  = ItemAvailable   
+  | ItemSold
+    deriving (Eq, Show)
+
+template ItemListing
+  with
+    owner             : Account
+    ownerAID          : AccountId
+    partiesInvolvedP  : [Party]
+    item              : ItemInfo
+    state             : ItemStateType
+  where 
+    signatory owner.account
+    ensure elem (this.owner.account) (this.partiesInvolvedP)
+    observer partiesInvolvedP 
+    
+    choice BuyItem : () with buyer : AccountId, buyerP : Party 
+      controller buyerP
+      do 
+        buyer_l <- fetch buyer
+        assert (buyer_l.account == buyerP)
+        assertMsg "Not enough funds." (this.item.price < buyer_l.balance)
+        
+        create Account with 
+            account = buyer_l.account
+            balance = buyer_l.balance - this.item.price
+        archive buyer
+
+        ownerUpdate <- create Account with 
+            account = owner.account
+            balance = owner.balance + this.item.price
+        
+        l_ownerUpdate <- fetch ownerUpdate
+        create this with
+            owner = l_ownerUpdate
+            ownerAID = ownerUpdate
+            state = ItemSold
+
+        archive ownerUpdate
+        pure()
