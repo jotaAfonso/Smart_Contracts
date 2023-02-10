@@ -1,0 +1,61 @@
+module SimpleMarketplace where
+
+import DA.List.Total
+import DA.Optional
+
+type SimpleMarketPlaceId = ContractId SimpleMarketPlace
+
+data StateType 
+  = ItemAvailable  
+  | OfferPlaced 
+  | Accepted 
+    deriving (Eq, Show)
+
+template SimpleMarketPlace
+  with 
+    owner       : Party
+    buyer       : [Party]
+    offerPrice  : Int
+    state       : StateType
+
+  where
+    signatory owner    
+    observer buyer
+
+    choice RegisterP : SimpleMarketPlaceId
+      with 
+        buyerParticipant  : Party
+      controller owner
+      do
+        assertMsg "Already has a buyer registered." (isNone (init buyer))
+        create SimpleMarketPlace with 
+          buyer = [buyerParticipant]
+          ..
+
+    choice MakeOffer : SimpleMarketPlaceId
+      with  
+        offerPriceParam  : Int
+      controller buyer
+      do 
+        assertMsg "Item is not available for an offer." (this.state == ItemAvailable)
+          
+        create SimpleMarketPlace with
+            offerPrice = offerPriceParam
+            state = OfferPlaced
+            ..
+
+    choice AcceptOffer : SimpleMarketPlaceId
+      controller owner
+      do 
+        assertMsg "Offer was not placed." (this.state == OfferPlaced)
+        create this with
+          state = Accepted
+              
+    choice RejectOffer : SimpleMarketPlaceId
+      controller owner
+      do 
+        assertMsg "Invalid state of contract." (this.state == OfferPlaced)
+        create SimpleMarketPlace with
+          offerPrice = 0
+          state = ItemAvailable
+          ..

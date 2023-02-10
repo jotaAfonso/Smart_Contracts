@@ -1,6 +1,8 @@
 module SimpleMarketplace where
 
 type MarketId = ContractId Market
+type OfferId = ContractId Offer
+type ItemId = ContractId Item
 
 data StateType 
   = ItemAvailable  
@@ -12,47 +14,99 @@ template Market
   with 
     owner       : Party
     buyer       : Party
-    description : Text
-    askingPrice : Int
-    offerPrice  : Int
     state       : StateType
 
   where
     signatory owner 
-    ensure owner /= buyer 
-      && description /= ""
-      && askingPrice > 0    
+    ensure owner /= buyer  
     observer buyer
 
-    choice MakeOffer : MarketId
-      with  
-        offerPriceParam  : Int
+    nonconsuming choice ListItem : ItemId
+      with
+        descriptionParam : Text
+        askingPriceParam : Int
+        ownerParam       : Party
+      controller owner
+        do
+          create Item with
+            description  = descriptionParam
+            askingPrice  = askingPriceParam
+            owner        = ownerParam
+            observers    = buyer
+
+    choice MakeOffer : (MarketId, OfferId)
+      with
+        item                 : ItemId
+        observerSellerParam  : Party
+        offerPriceParam      : Int
+        buyerParam           : Party 
       controller buyer
-      do 
-        assertMsg "Item is not available for an offer." (this.state == ItemAvailable)
-        assertMsg "Offer too low." (offerPriceParam > this.askingPrice)
-        assertMsg "Offer invalid." (offerPriceParam > 0)
+        do 
+          Item{..} <- fetch item
+          assertMsg "Item is not available for an offer." (this.state == ItemAvailable)
+          assertMsg "Offer invalid." (offerPriceParam > 0)
+          assertMsg "Offer too low." (offerPriceParam >= askingPrice)
           
-        create Market with
-            offerPrice = offerPriceParam
+          market <- create this with
             state = OfferPlaced
-            ..
+          
+          offer <- create Offer with
+            observerSeller  = observerSellerParam
+            offerPrice      = offerPriceParam
+            buyer           = buyerParam 
+
+          pure(market, offer)
 
     choice AcceptOffer : MarketId
+      with 
+        offer   : OfferId
       controller owner
       do 
         assertMsg "Offer was not placed." (this.state == OfferPlaced)
+                
+        Offer{..} <- fetch offer
+        exercise offer ArchiveOffer
+
         create this with
           state = Accepted
-              
-    choice RejectOffer : MarketId
+
+    choice RejectOffer : ()
+      with 
+        offer   : OfferId
       controller owner
       do 
         assertMsg "Invalid state of contract." (this.state == OfferPlaced)
-        create Market with
-          offerPrice = 0
+        
+        exercise offer ArchiveOffer
+
+        create this with
           state = ItemAvailable
-          ..
+        
+        pure()
+
+template Item
+  with
+    description : Text
+    askingPrice : Int
+    owner       : Party
+    observers   : Party
+  where 
+    signatory owner
+    observer observers
+
+template Offer
+  with
+    observerSeller  : Party
+    offerPrice      : Int
+    buyer           : Party 
+  where 
+    signatory buyer
+    observer observerSeller
+
+    choice ArchiveOffer : ()
+      controller observerSeller
+      do
+        archive self
 
 {-
 template MarketApp

@@ -3,39 +3,35 @@ module Main where
 import SimpleMarketplace
 import Daml.Script
 
-setup : Script MarketId
+setup : Script ()
 setup = script do    
 -- user_setup_begin
   alice <- allocateParty "Alice"
   bob <- allocateParty "Bob" 
 
   test <- submit alice do
-      createCmd Market with
-        owner       = alice
-        buyer       = bob
-        description = "test"
-        askingPrice = 5
-        offerPrice  = 0
-        state       = ItemAvailable
+    createCmd Market with
+      owner       = alice
+      buyer       = bob
+      state       = ItemAvailable
 
-  {-
-  submitMustFail  bob do
-    exerciseCmd test MakeOffer with offerPriceParam = 4
-  -}
+  item <- submit alice do
+    exerciseCmd test ListItem with 
+      descriptionParam = "Test"
+      askingPriceParam = 10
+      ownerParam = alice
 
-  {-
-  test <- submit alice do
-    exerciseCmd test RejectOffer
-  -}
-  
-  test <- submit bob do
-    exerciseCmd test MakeOffer with offerPriceParam = 6
+  item2 <- submit alice do
+    exerciseCmd test ListItem with 
+      descriptionParam = "Test"
+      askingPriceParam = 10
+      ownerParam = alice
 
-  test <- submit alice do
-    exerciseCmd test RejectOffer
+  (test, offer) <- submit bob do
+    exerciseCmd test MakeOffer with
+      item = item
+      observerSellerParam = alice
+      offerPriceParam = 10
+      buyerParam = bob
 
-  test <- submit bob do
-    exerciseCmd test MakeOffer with offerPriceParam = 6
-
-  submit alice do
-    exerciseCmd test AcceptOffer
+  pure()
