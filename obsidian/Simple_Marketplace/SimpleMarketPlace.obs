@@ -18,21 +18,17 @@ main contract SimpleMarketPlace {
             ( OfferPlaced | ItemAvailable ) this, int offer) {
         switch this {
             case ItemAvailable {
-                if (offer >= 0) {
+                if (offer >= 0) 
                     revert "Item is not Available";
-                }
-                else
-                {
+                else {
                     this.offerPrice = offer;
                     ->OfferPlaced;
                 }
             }
             case Accepted {
-                // do nothing or revert to itemvailable
                 revert "Item is not Available";
             }
             case OfferPlaced {
-                // do nothing or revert to itemvailable
                 revert "Item is not Available";
             }
             case Nothing {
