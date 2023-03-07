@@ -74,7 +74,8 @@ module 0x1::SimpleMarketPlace {
         let Offer { offer_price: _ } = offer_to_reject;
     }
 
-    public fun accept_offer(account_Seller: &signer, account_Buyer: &signer) acquires Offer, Item {
+    public fun accept_offer(account_Seller: &signer, account_Buyer: &signer) 
+            acquires Offer, Item {
         let acc_addr_1 = Signer::address_of(account_Seller);
         let acc_addr_2 = Signer::address_of(account_Buyer);
 
