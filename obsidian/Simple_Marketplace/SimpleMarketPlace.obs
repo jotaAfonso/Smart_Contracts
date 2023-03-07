@@ -14,7 +14,8 @@ main contract SimpleMarketPlace {
         ->ItemAvailable;  
     }
 
-    transaction makeOffer(SimpleMarketPlace@ItemAvailable >> ( OfferPlaced | ItemAvailable ) this, int offer) {
+    transaction makeOffer(SimpleMarketPlace@ItemAvailable >> 
+            ( OfferPlaced | ItemAvailable ) this, int offer) {
         switch this {
             case ItemAvailable {
                 if (offer >= 0) {
